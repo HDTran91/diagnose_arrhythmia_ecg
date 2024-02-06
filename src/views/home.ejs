@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECG Analyzer</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Include jQuery library -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    
+</head>
+<body>
+    <div id="container">
+        <div id="imageContainer">
+            <h3>Upload Images</h3>
+            <!-- Add a form with a POST method for image upload -->
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="file" name="images" id="imageInput" multiple accept="image/*">
+                <button type="button" id="submit">Upload</button>
+            </form>
+            <div id="previewImages"></div>
+        </div>
+        <div id="resultContainer">
+            <h3>Analysis Results</h3>
+            <p><strong>Heart Rate:</strong> <span id="heartRateResult">N/A</span></p>
+            <p><strong>Rhythm:</strong> <span id="rhythmResult">N/A</span></p>
+            <p><strong>Anatomic Location:</strong> <span id="anatomicLocationResult">N/A</span></p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
