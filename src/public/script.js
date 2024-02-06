@@ -40,16 +40,20 @@ function uploadImages() {
     }
 
     $.ajax({
-        url: "/upload",
-        type: "POST",
+        url: '/upload', // The endpoint where you're uploading images
+        type: 'POST',
         data: formData,
-        contentType: false,
+        contentType: false, // These two settings are important for FormData
         processData: false,
-        success: function(data){
-            console.log(data);
+        success: function(data) {
+            // Update the frontend with the received data
+            $('#heartRateResult').text(data.heart_rate_bpm.toFixed(2) + ' BPM');
+            $('#rhythmResult').text(data.rhythm_classification);
+            $('#anatomicLocationResult').text(data.inferred_anatomic_location);
         },
-        error: function(error){
-            console.error('Error:', error);
+        error: function(xhr, status, error) {
+            // Handle any error here
+            console.error("Error: ", error);
         }
-    });
+    })
 }

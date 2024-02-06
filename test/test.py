@@ -1,3 +1,8 @@
+import sys
+import json
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.layers import Dropout
 from matplotlib import pyplot as plt
 import wfdb
 import numpy as np
@@ -23,6 +28,7 @@ def bandpass_filter(data, lowcut, highcut, fs, order=5):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = filtfilt(b, a, data)
     return y
+
 
 def calculate_heart_rate(ecg_signal, peaks, fs):
     # Calculate the intervals between R-peaks in samples
@@ -177,6 +183,31 @@ def plot_ecg_with_detailed_annotations(ecg_signal, peaks, p_waves, q_points, s_p
     # Display the plot
     plt.show()
 
+def augment_ecg_signal(signal, noise_level=0.01, shift_max=0.1, scaling_factor=1.2):
+    """
+    Augment the ECG signal by adding Gaussian noise, shifting, and scaling.
+    
+    Parameters:
+    - signal: Original ECG signal.
+    - noise_level: Standard deviation of Gaussian noise to be added.
+    - shift_max: Maximum fraction of the signal length by which to shift the signal.
+    - scaling_factor: Factor by which to scale the signal amplitude.
+    
+    Returns:
+    - Augmented ECG signal.
+    """
+    # Add Gaussian noise
+    noise = np.random.normal(0, noise_level, signal.shape)
+    signal_noisy = signal + noise
+    
+    # Randomly shift the signal
+    shift = np.random.randint(-int(shift_max * len(signal)), int(shift_max * len(signal)))
+    signal_shifted = np.roll(signal_noisy, shift)
+    
+    # Scale the signal
+    signal_scaled = signal_shifted * scaling_factor
+    
+    return signal_scaled
 
 def infer_anatomic_location(qrs_widths, p_waves_presence, rhythm_classification):
     """
@@ -200,11 +231,14 @@ def infer_anatomic_location(qrs_widths, p_waves_presence, rhythm_classification)
         return "Supraventricular origin suspected with normal atrial activity."
     else:
         return "Specific anatomic location unclear from available data."
-
+    
+def calculate_rr_variability(rr_intervals):
+    # Calculate the standard deviation of RR intervals
+    rr_std = np.std(rr_intervals)
+    return rr_std
 
 # Correct the record_path to navigate up two directories and then into the Person_01 directory
-record_path = "ecg-id-database-1.0.0/Person_03/rec_1" 
-
+record_path = "ecg-id-database-1.0.0/Person_01/rec_1"
 # Load the waveform data and header information
 record = wfdb.rdrecord(record_path)
 
@@ -241,7 +275,7 @@ ecg_signal_normalized = (ecg_signal - np.mean(ecg_signal, axis=0)) / np.std(ecg_
 fs = sampling_frequency  # Sampling frequency from your ECG data
 lowcut = 0.5  # Low cut frequency in Hz
 highcut = 50.0  # High cut frequency in Hz
-ecg_filtered = bandpass_filter(ecg_signal[:,0], lowcut, highcut, fs)
+ecg_filtered = bandpass_filter(ecg_signal_normalized[:,0], lowcut, highcut, fs)
 print(ecg_filtered)
 
 
@@ -264,11 +298,6 @@ plt.ylabel('Amplitude')
 plt.legend()
 plt.show()
 
-
-def calculate_rr_variability(rr_intervals):
-    # Calculate the standard deviation of RR intervals
-    rr_std = np.std(rr_intervals)
-    return rr_std
 
 # Calculate RR intervals in seconds
 rr_intervals_sec = np.diff(peaks) / fs
@@ -357,40 +386,53 @@ for idx, symbol in zip(annotation_indices, annotations):
 segments_array = np.array(segments)
 labels_array = np.array(labels)
 
+# Augment each segment in the segments_array
+augmented_segments = np.array([augment_ecg_signal(segment.flatten()) for segment in segments_array])
 
-#split into training and testing
-X_train, X_test, y_train, y_test = train_test_split(segments_array, labels_array, test_size=0.2, random_state=42)
+# Reshape augmented_segments to match the input shape expected by the CNN
+n_samples = augmented_segments.shape[0]
+augmented_segments_reshaped = augmented_segments.reshape(n_samples, 200, 2, 1)
+
+# Split the augmented data into training and testing sets
+X_train_aug, X_test_aug, y_train, y_test = train_test_split(augmented_segments_reshaped, labels_array, test_size=0.2, random_state=42)
 
 # reshaping given your initial data dimensions and desired 2D CNN input
-X_train_reshaped = X_train.reshape((X_train.shape[0], X_train.shape[1], X_train.shape[2], 1))
-X_test_reshaped = X_test.reshape((X_test.shape[0], X_test.shape[1], X_test.shape[2], 1))
+X_train_reshaped = X_train_aug.reshape((X_train_aug.shape[0], 200, 2, 1))
+X_test_reshaped = X_test_aug.reshape((X_test_aug.shape[0], 200, 2, 1))
 
 print("X_train_reshaped shape:", X_train_reshaped.shape)
 print("X_test_reshaped shape:", X_test_reshaped.shape)
 
 
+# Define the L2 regularization penalty
+l2_penalty = 0.001  # This is a hyperparameter you can tune
 
-tf.get_logger().setLevel(logging.ERROR)  # Suppress warnings
-
-# Define the 2D CNN model
+# Configure the EarlyStopping callback
+early_stopping = EarlyStopping(
+    monitor='val_loss',  # Monitor the validation loss
+    patience=5,          # Number of epochs to wait after min has been hit
+    verbose=1,           # Print messages when stopping
+    mode='min',          # The direction is automatically inferred if not set
+    restore_best_weights=True  # Restore model weights from the epoch with the best value of the monitored quantity
+)
+# Define the 2D CNN model with L2 regularization
 model = Sequential([
-    Conv2D(32, (3, 1), activation='relu', input_shape=(200, 2, 1)),  # Adjusted kernel size
+    Conv2D(32, (3, 1), activation='relu', input_shape=(200, 2, 1), kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
     MaxPooling2D((2, 1)),
-    Conv2D(64, (3, 1), activation='relu'),  # Adjusted kernel size
+    Conv2D(64, (3, 1), activation='relu', kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
     MaxPooling2D((2, 1)),
     Flatten(),
-    Dense(64, activation='relu'),
+    Dense(64, activation='relu', kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
     Dropout(0.5),
-    Dense(1, activation='sigmoid')
+    Dense(1, activation='sigmoid', kernel_regularizer=l2(l2_penalty))  # Added L2 regularization
 ])
-
 
 model.compile(optimizer='adam',
               loss='binary_crossentropy',  # Use 'categorical_crossentropy' for multi-class
               metrics=['accuracy'])
 
 # Train the model
-history = model.fit(X_train_reshaped, y_train, epochs=10, validation_split=0.2, batch_size=32)
+history = model.fit(X_train_reshaped, y_train, epochs=10, validation_split=0.2, batch_size=32, callbacks=[early_stopping])
 
 # Evaluate the model on the test set
 test_loss, test_acc = model.evaluate(X_test_reshaped, y_test)

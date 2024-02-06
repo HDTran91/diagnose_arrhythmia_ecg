@@ -10,32 +10,44 @@ let mainPage = (req, res) => {
 }
 
 let uploadImages = (req, res) => {
-    // Access the uploaded files from req.files
     const images = req.files;
-
-    // Save uploaded images to disk
     const imagePaths = [];
+
     Object.values(images).forEach((file, index) => {
-    // Check the correct property (e.g., file.buffer)
-    const fileData = file.buffer || file.data;
-
-    // Save images to the 'uploads' folder
-    const fileName = `image_${index}.jpg`;
-    const filePath = path.join(__dirname, './../uploads', fileName);
-    fs.writeFileSync(filePath, fileData);
-    imagePaths.push(fileName); // Push only the filename, not the full path
-});
-    // console.log(imagePaths)
-    // Spawn a Python process and send paths to the Python script
-    const pythonProcess = spawn('python', ['process_images.py', JSON.stringify(imagePaths)]);
-
-    // Listen for Python script output
-    pythonProcess.stdout.on('data', (data) => {
-        console.log(`Python script output: ${data}`);
+        const fileData = file.buffer || file.data;
+        const fileName = `image_${index}.jpg`;
+        const filePath = path.join(__dirname, './../uploads', fileName);
+        fs.writeFileSync(filePath, fileData);
+        imagePaths.push(fileName);
     });
 
-    // Respond with a success message
-    res.status(200).json({ message: 'Images received and temporarily stored.' });
+    const pythonProcess = spawn('python', ['process_images.py', JSON.stringify(imagePaths)]);
+    let fullOutput = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+        fullOutput += data.toString();
+    });
+
+    pythonProcess.on('close', (code) => {
+        const jsonStart = fullOutput.indexOf('---JSON_START---') + '---JSON_START---'.length;
+        const jsonEnd = fullOutput.indexOf('---JSON_END---');
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            const jsonString = fullOutput.substring(jsonStart, jsonEnd).trim();
+            try {
+                const outputFromPython = JSON.parse(jsonString);
+                console.log("Python script output:", outputFromPython);
+                res.status(200).json(outputFromPython); // Correct placement
+            } catch (error) {
+                console.error("Error parsing JSON from Python script:", error);
+                res.status(500).json({ message: "Error processing images" });
+            }
+        } else {
+            // If no JSON data found, still need to handle it gracefully
+            res.status(500).json({ message: "Error processing images, no output from Python script" });
+        }
+    });
+    
+    // Removed the premature response here
 };
 
 module.exports = {
