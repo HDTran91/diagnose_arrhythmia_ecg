@@ -18,9 +18,14 @@ import logging
 from sklearn.model_selection import train_test_split
 
 
-# # Receive data from Node.js through command line arguments
+# Receive data from Node.js through command line arguments
 # data_from_nodejs = json.loads(sys.argv[1])
 
+# print(data_from_nodejs)
+
+# Process the data (in this case, simply print it)
+# for index, filename in enumerate(data_from_nodejs):
+#     print(f"Image {index + 1} received - Filename: {filename}")
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
@@ -243,7 +248,7 @@ def calculate_rr_variability(rr_intervals):
     return rr_std
 
 # Correct the record_path to navigate up two directories and then into the Person_01 directory
-record_path = "src/uploads/rec_1"
+record_path = "ecg-id-database-1.0.0/Person_01/rec_2"
 # Load the waveform data and header information
 record = wfdb.rdrecord(record_path)
 
@@ -380,9 +385,9 @@ labels = []
 
 for idx, symbol in zip(annotation_indices, annotations):
     # Ensure the window does not go beyond the signal boundaries
-    if idx > pre_event_window_size and idx < len(ecg_filtered) - post_event_window_size:
+    if idx > pre_event_window_size and idx < len(ecg_signal) - post_event_window_size:
         # Use ecg_filtered to extract the segment
-        segment = ecg_filtered[(idx-pre_event_window_size):(idx+post_event_window_size)]
+        segment = ecg_signal[(idx-pre_event_window_size):(idx+post_event_window_size),:]
         segments.append(segment)
         # Assign labels based on your criteria, e.g., 0 for 'N', 1 for others
         label = 0 if symbol == 'N' else 1
@@ -394,23 +399,30 @@ segments_array = np.array(segments)
 labels_array = np.array(labels)
 
 # Augment each segment in the segments_array
-augmented_segments = np.array([augment_ecg_signal(segment.flatten()) for segment in segments_array])
+augmented_segments = [augment_ecg_signal(segment.flatten()) for segment in segments_array]
 
+
+# Convert the list of augmented segments back to a numpy array for further processing
+augmented_segments_array = np.stack(augmented_segments)
+print("--augmented_segments_array----",augmented_segments_array.shape)
 
 # The number of samples
-n_samples = augmented_segments.shape[0]
+n_samples = augmented_segments_array.shape[0]
+print("---n---",n_samples)
 
 
 # Assuming each augmented segment is now correctly 400 elements in size, 
 # and needs to be reshaped to (200, 2, 1) for the CNN input:
-augmented_segments_reshaped = augmented_segments.reshape(n_samples, 200, 1, 1)
+augmented_segments_reshaped = augmented_segments_array.reshape(n_samples, 200, 2, 1)
+print("---ns---",augmented_segments_reshaped.shape)
+
 
 # Split the augmented data into training and testing sets
 X_train_aug, X_test_aug, y_train, y_test = train_test_split(augmented_segments_reshaped, labels_array, test_size=0.2, random_state=42)
 
 # reshaping given your initial data dimensions and desired 2D CNN input
-X_train_reshaped = X_train_aug.reshape((X_train_aug.shape[0], 200, 1, 1))
-X_test_reshaped = X_test_aug.reshape((X_test_aug.shape[0], 200, 1, 1))
+X_train_reshaped = X_train_aug.reshape((X_train_aug.shape[0], 200, 2, 1))
+X_test_reshaped = X_test_aug.reshape((X_test_aug.shape[0], 200, 2, 1))
 
 print("X_train_reshaped shape:", X_train_reshaped.shape)
 print("X_test_reshaped shape:", X_test_reshaped.shape)
@@ -429,7 +441,7 @@ early_stopping = EarlyStopping(
 )
 # Define the 2D CNN model with L2 regularization
 model = Sequential([
-    Conv2D(32, (3, 1), activation='relu', input_shape=(200, 1, 1), kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
+    Conv2D(32, (3, 1), activation='relu', input_shape=(200, 2, 1), kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
     MaxPooling2D((2, 1)),
     Conv2D(64, (3, 1), activation='relu', kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
     MaxPooling2D((2, 1)),
@@ -449,3 +461,15 @@ history = model.fit(X_train_reshaped, y_train, epochs=10, validation_split=0.2, 
 # Evaluate the model on the test set
 test_loss, test_acc = model.evaluate(X_test_reshaped, y_test)
 print(f'Test accuracy: {test_acc}')
+
+# Create a dictionary with the data
+output_data = {
+    "heart_rate_bpm": heart_rate_bpm,
+    "rhythm_classification": rhythm_classification,
+    "inferred_anatomic_location": anatomic_location
+}
+
+
+print('---JSON_START---')
+print(json.dumps(output_data))
+print('---JSON_END---')

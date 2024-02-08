@@ -5,7 +5,7 @@ Project: This project goal is to teach an artificially intelligent software how 
 locations from an ECG recording
 * Idea:
 
-1. *User Uploads 12 ECG Images*: The process begins with the user uploading 12 Electrocardiogram (ECG) images through a web interface. This is typically facilitated by a form on a webpage where users can select and submit their ECG images for analysis.
+1. *User Uploads 12 ECG Images*: design a user interface that allows a user to add a picture for the AI software to analyze This is typically facilitated by a form on a webpage where users can select and submit their ECG images for analysis.
 
 2. *Server Receives and Stores Images*: Once uploaded, the images are sent to the backend server where they are temporarily stored for processing. This involves receiving the image data and saving it in a way that it can be accessed for the next steps in the process.
 

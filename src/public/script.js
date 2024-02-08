@@ -1,59 +1,69 @@
 let files = [];
 
-document.getElementById('imageInput').addEventListener('change', handleImageUpload);
-
-function handleImageUpload(event) {
-    const previewImagesContainer = document.getElementById('previewImages');
-    previewImagesContainer.innerHTML = '';
+document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+// Adjust preview for general files (for images, show thumbnails; for others, show file names)
+function handleFileUpload(event) {
+    const previewFilesContainer = document.getElementById('previewFiles');
+    previewFilesContainer.innerHTML = '';
 
     files = event.target.files;
 
     for (let i = 0; i < files.length && i < 12; i++) {
         const file = files[i];
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file);
-        img.alt = `Image ${i + 1}`;
-        previewImagesContainer.appendChild(img);
+
+        if (file.type.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            img.alt = `File ${i + 1}`;
+            img.style.maxWidth = '100px';
+            img.style.maxHeight = '100px';
+            previewFilesContainer.appendChild(img);
+        } else {
+            const fileNameDiv = document.createElement('div');
+            fileNameDiv.textContent = `File ${i + 1}: ${file.name}`;
+            previewFilesContainer.appendChild(fileNameDiv);
+        }
     }
-
-    // Call the function to upload images to the server
-    $("#submit").on("click", function (event) {
-        event.preventDefault(); // Prevent the default form submission behavior
-        if ($.isEmptyObject(files)) {
-            showAlert("Please, enter all the fields")
-            return false;
-        }
-
-        if (!$.isEmptyObject(files)) {
-            uploadImages();
-        }
-    });
 }
 
-// Function to upload images to the server
-function uploadImages() {
-    const formData = new FormData();
+// Separated event listener for the submit button to avoid re-binding
+$("#submit").on("click", function (event) {
+    event.preventDefault(); // Prevent the default form submission behavior
+    if (files.length === 0) {
+        alert("Please select files to upload.");
+        return false;
+    }
 
+    uploadFiles();
+});
+
+// Function to upload files to the server
+function uploadFiles() {
+    const formData = new FormData();
     
     for (let i = 0; i < files.length; i++) {
-        formData.append('images', files[i]);
+        formData.append('files', files[i]);
     }
 
     $.ajax({
-        url: '/upload', // The endpoint where you're uploading images
+        url: '/upload',
         type: 'POST',
         data: formData,
-        contentType: false, // These two settings are important for FormData
+        contentType: false,
         processData: false,
         success: function(data) {
-            // Update the frontend with the received data
+            // Assuming 'data' contains the response with specific properties
+      
             $('#heartRateResult').text(data.heart_rate_bpm.toFixed(2) + ' BPM');
             $('#rhythmResult').text(data.rhythm_classification);
             $('#anatomicLocationResult').text(data.inferred_anatomic_location);
+            $('#ecgImage').attr('src', data.ecg_image_url);
+            $('#ecgImageContainer').show();//show image
+            $('#previewFiles').hide(); // Hide file input and submit
         },
         error: function(xhr, status, error) {
-            // Handle any error here
             console.error("Error: ", error);
+            alert("Error uploading files.");
         }
-    })
+    });
 }

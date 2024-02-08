@@ -13,7 +13,7 @@ const upload = multer({ storage: storage });
 
 let InitRoutes =(app) => {
     router.get("/", home.mainPage);
-    router.post("/upload", router.post("/upload", upload.array('images', 12), home.uploadImages), home.uploadImages)
+    router.post("/upload", upload.array('files', 12), home.uploadFiles)
 
     return app.use("/",router)
 }

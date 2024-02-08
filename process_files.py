@@ -21,11 +21,22 @@ from sklearn.model_selection import train_test_split
 # Receive data from Node.js through command line arguments
 data_from_nodejs = json.loads(sys.argv[1])
 
-# print(data_from_nodejs)
+def plot_and_save_ecg(record_path):
+    
+    # Read the ECG record
+    record = wfdb.rdrecord(record_path)
+    
+    # Plot each signal in a subplot
+    plt.figure(figsize=(20, 10))
+    for i in range(record.n_sig):
+        plt.subplot(record.n_sig, 1, i+1)
+        plt.plot(record.p_signal[:, i])
+        plt.title(record.sig_name[i])
+        plt.grid(True)
 
-# Process the data (in this case, simply print it)
-# for index, filename in enumerate(data_from_nodejs):
-#     print(f"Image {index + 1} received - Filename: {filename}")
+    plt.tight_layout()
+    plt.savefig("src/uploads/ecg_12leads.jpg")
+    plt.close() 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
@@ -64,16 +75,6 @@ def classify_rhythm(rr_intervals_sec, heart_rate_bpm):
     else:
         return "Normal Rhythm"
     
-def plot_ecg_with_annotations(ecg_signal, peaks, rhythm_classification, fs):
-    plt.figure(figsize=(15, 7))
-    t = np.arange(len(ecg_signal)) / fs
-    plt.plot(t, ecg_signal, label='Filtered ECG')
-    plt.plot(peaks/fs, ecg_signal[peaks], "x", label='R-peaks')
-    plt.title(f'ECG Signal with Rhythm Classification: {rhythm_classification}')
-    plt.xlabel('Time (seconds)')
-    plt.ylabel('Amplitude')
-    plt.legend()
-    plt.show()
 
 def find_p_waves(ecg_signal, r_peaks, fs):
     p_waves = []
@@ -194,18 +195,8 @@ def plot_ecg_with_detailed_annotations(ecg_signal, peaks, p_waves, q_points, s_p
     plt.show()
 
 def augment_ecg_signal(signal, noise_level=0.01, shift_max=0.1, scaling_factor=1.2):
-    """
-    Augment the ECG signal by adding Gaussian noise, shifting, and scaling.
     
-    Parameters:
-    - signal: Original ECG signal.
-    - noise_level: Standard deviation of Gaussian noise to be added.
-    - shift_max: Maximum fraction of the signal length by which to shift the signal.
-    - scaling_factor: Factor by which to scale the signal amplitude.
     
-    Returns:
-    - Augmented ECG signal.
-    """
     # Add Gaussian noise
     noise = np.random.normal(0, noise_level, signal.shape)
     signal_noisy = signal + noise
@@ -247,8 +238,14 @@ def calculate_rr_variability(rr_intervals):
     rr_std = np.std(rr_intervals)
     return rr_std
 
-# Correct the record_path to navigate up two directories and then into the Person_01 directory
-record_path = "ecg-id-database-1.0.0/Person_01/rec_1"
+file_paths = data_from_nodejs
+# Extract the base path from the first file path, removing the file extension
+base_path = os.path.splitext(file_paths[0])[0]
+    
+# Strip off any additional extensions (if present, like in '.rec_1.dat')
+base_path = os.path.splitext(base_path)[0]
+
+record_path = base_path
 # Load the waveform data and header information
 record = wfdb.rdrecord(record_path)
 
@@ -299,14 +296,14 @@ heart_rate_bpm = calculate_heart_rate(ecg_filtered, peaks, fs)
 print(f'Average Heart Rate: {heart_rate_bpm:.2f} BPM')
 
 # Optional: Plot the filtered ECG signal and detected R-peaks to verify correctness
-plt.figure(figsize=(12, 6))
-plt.plot(ecg_filtered, label='Filtered ECG')
-plt.plot(peaks, ecg_filtered[peaks], "x", label='Detected R-peaks')
-plt.title('R-peaks in ECG Signal')
-plt.xlabel('Samples')
-plt.ylabel('Amplitude')
-plt.legend()
-plt.show()
+# plt.figure(figsize=(12, 6))
+# plt.plot(ecg_filtered, label='Filtered ECG')
+# plt.plot(peaks, ecg_filtered[peaks], "x", label='Detected R-peaks')
+# plt.title('R-peaks in ECG Signal')
+# plt.xlabel('Samples')
+# plt.ylabel('Amplitude')
+# plt.legend()
+# plt.show()
 
 
 # Calculate RR intervals in seconds
@@ -321,7 +318,7 @@ print(f'RR Interval Variability (std): {rr_variability:.2f}')
 rhythm_classification = classify_rhythm(rr_intervals_sec, heart_rate_bpm)
 print(f'Rhythm Classification_1: {rhythm_classification}')
 
-plot_ecg_with_annotations(ecg_filtered, peaks, rhythm_classification, fs)
+# plot_ecg_with_annotations(ecg_filtered, peaks, rhythm_classification, fs)
 
 # Detect P waves
 p_waves = find_p_waves(ecg_filtered, peaks, fs)
@@ -345,8 +342,6 @@ p_qrs_t_sequence = check_p_qrs_t_relationship(p_waves, q_points, peaks, s_points
 rhythm_conclusion = conclude_rhythm(p_wave_regularity, qrs_regularity, t_wave_regularity, p_qrs_t_sequence, rr_variability)
 print(f'Rhythm Conclusion: {rhythm_conclusion}')
 
-plot_ecg_with_detailed_annotations(ecg_filtered, peaks, p_waves, q_points, s_points, t_waves, rhythm_conclusion, fs)
-
 
 # Calculate QRS widths in milliseconds
 qrs_widths_ms = (s_points - q_points) / fs * 1000
@@ -359,22 +354,21 @@ anatomic_location = infer_anatomic_location(qrs_widths_ms, p_waves_presence, rhy
 print(f'Inferred Anatomic Location: {anatomic_location}')
 
 
+plot_and_save_ecg(record_path)
 
-# Assuming ecg_filtered is your filtered ECG signal and is an array-like structure
-# Create a time array t that corresponds to the length of your ECG signal
 
-fs = 500 # Replace with your actual sampling frequency
+fs = 500 #  sampling frequency
 t = np.arange(len(ecg_filtered)) / fs
 
 # Plot the filtered ECG signal
-plt.figure(figsize=(12, 6))
-plt.plot(t, ecg_filtered, label='Filtered ECG Signal')
-plt.title('Filtered ECG Signal')
-plt.xlabel('Time (seconds)')
-plt.ylabel('Amplitude')
-plt.legend()
-plt.grid(True)
-plt.show()
+# plt.figure(figsize=(12, 6))
+# plt.plot(t, ecg_filtered, label='Filtered ECG Signal')
+# plt.title('Filtered ECG Signal')
+# plt.xlabel('Time (seconds)')
+# plt.ylabel('Amplitude')
+# plt.legend()
+# plt.grid(True)
+# plt.show()
 
 # Define the window size around the annotation index
 pre_event_window_size = 100  # 200 ms before the event
@@ -385,12 +379,14 @@ labels = []
 
 for idx, symbol in zip(annotation_indices, annotations):
     # Ensure the window does not go beyond the signal boundaries
-    if idx > pre_event_window_size and idx < len(ecg_signal) - post_event_window_size:
-        segment = ecg_signal[(idx-pre_event_window_size):(idx+post_event_window_size), :]
+    if idx > pre_event_window_size and idx < len(ecg_filtered) - post_event_window_size:
+        # Use ecg_filtered to extract the segment
+        segment = ecg_filtered[(idx-pre_event_window_size):(idx+post_event_window_size)]
         segments.append(segment)
         # Assign labels based on your criteria, e.g., 0 for 'N', 1 for others
         label = 0 if symbol == 'N' else 1
         labels.append(label)
+
 
 # Assuming 'segments' is a list of your data and 'labels' is a list of your labels
 segments_array = np.array(segments)
@@ -399,16 +395,21 @@ labels_array = np.array(labels)
 # Augment each segment in the segments_array
 augmented_segments = np.array([augment_ecg_signal(segment.flatten()) for segment in segments_array])
 
-# Reshape augmented_segments to match the input shape expected by the CNN
+
+# The number of samples
 n_samples = augmented_segments.shape[0]
-augmented_segments_reshaped = augmented_segments.reshape(n_samples, 200, 2, 1)
+
+
+# Assuming each augmented segment is now correctly 400 elements in size, 
+# and needs to be reshaped to (200, 2, 1) for the CNN input:
+augmented_segments_reshaped = augmented_segments.reshape(n_samples, 200, 1, 1)
 
 # Split the augmented data into training and testing sets
 X_train_aug, X_test_aug, y_train, y_test = train_test_split(augmented_segments_reshaped, labels_array, test_size=0.2, random_state=42)
 
 # reshaping given your initial data dimensions and desired 2D CNN input
-X_train_reshaped = X_train_aug.reshape((X_train_aug.shape[0], 200, 2, 1))
-X_test_reshaped = X_test_aug.reshape((X_test_aug.shape[0], 200, 2, 1))
+X_train_reshaped = X_train_aug.reshape((X_train_aug.shape[0], 200, 1, 1))
+X_test_reshaped = X_test_aug.reshape((X_test_aug.shape[0], 200, 1, 1))
 
 print("X_train_reshaped shape:", X_train_reshaped.shape)
 print("X_test_reshaped shape:", X_test_reshaped.shape)
@@ -427,7 +428,7 @@ early_stopping = EarlyStopping(
 )
 # Define the 2D CNN model with L2 regularization
 model = Sequential([
-    Conv2D(32, (3, 1), activation='relu', input_shape=(200, 2, 1), kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
+    Conv2D(32, (3, 1), activation='relu', input_shape=(200, 1, 1), kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
     MaxPooling2D((2, 1)),
     Conv2D(64, (3, 1), activation='relu', kernel_regularizer=l2(l2_penalty)),  # Added L2 regularization
     MaxPooling2D((2, 1)),
@@ -452,7 +453,8 @@ print(f'Test accuracy: {test_acc}')
 output_data = {
     "heart_rate_bpm": heart_rate_bpm,
     "rhythm_classification": rhythm_classification,
-    "inferred_anatomic_location": anatomic_location
+    "inferred_anatomic_location": anatomic_location,
+    "ecg_image_url": "src/uploads/ecg_12leads.jpg" 
 }
 
 
