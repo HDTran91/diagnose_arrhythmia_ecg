@@ -357,8 +357,8 @@ print(f'Inferred Anatomic Location: {anatomic_location}')
 plot_and_save_ecg(record_path)
 
 
-fs = 500 #  sampling frequency
-t = np.arange(len(ecg_filtered)) / fs
+# fs = 500 #  sampling frequency
+# t = np.arange(len(ecg_filtered)) / fs
 
 # Plot the filtered ECG signal
 # plt.figure(figsize=(12, 6))
@@ -406,6 +406,8 @@ augmented_segments_reshaped = augmented_segments.reshape(n_samples, 200, 1, 1)
 
 # Split the augmented data into training and testing sets
 X_train_aug, X_test_aug, y_train, y_test = train_test_split(augmented_segments_reshaped, labels_array, test_size=0.2, random_state=42)
+
+
 
 # reshaping given your initial data dimensions and desired 2D CNN input
 X_train_reshaped = X_train_aug.reshape((X_train_aug.shape[0], 200, 1, 1))

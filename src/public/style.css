@@ -7,67 +7,77 @@ body {
     align-items: center;
     justify-content: center;
     background-color: #f4f4f4;
+    background-image: url('Cardiac-Arrhythmia-1024x683.jpeg');
+    color: white;
 }
 
 #container {
     display: flex;
-    flex-direction: column; /* Changed to column for a vertical layout */
-    align-items: center; /* Align items in the center */
+    flex-direction: row; 
+    align-items: start;
+    max-width: 90%; 
+    gap: 20px; 
+    padding: 20px; 
+    border-radius: 5px; 
 }
 
-#fileContainer {
-    margin-bottom: 20px; /* Adjusted for the vertical layout */
-}
-
-#resultContainer {
+#fileContainer, #resultContainer {
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
     padding: 20px;
     border: 1px solid #ccc;
     border-radius: 5px;
-    width: 100%; /* Optional: Adjust width as needed */
+}
+
+#ecgImageContainer {
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    margin-bottom: 20px; 
+}
+
+#ecgImageContainer img {
+    max-width: 100%; 
+    height: auto; 
+    border-radius: 5px; 
 }
 
 #previewFiles {
     display: flex;
     flex-wrap: wrap;
-    max-width: 600px; /* Adjusted max-width for better layout */
-    margin-top: 10px; /* Space between input and preview area */
+    gap: 10px; 
+    margin-top: 20px; 
 }
 
 #previewFiles img {
-    width: 100px;
-    margin: 0 5px 10px 0;
-    display: block;
-    border-radius: 5px; /* Optional: Adds rounded corners to images */
+    width: 100px; 
+    border-radius: 5px; 
 }
 
-#previewFiles div {
-    padding: 5px;
-    margin: 0 5px 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100px; /* Set a fixed width for non-image file representations */
-    height: 100px; /* Set a fixed height for uniformity */
-    overflow: hidden; /* Ensure long names do not break the layout */
-    text-align: center;
-}
-
-/* Additional styling for aesthetics */
 input[type="file"] {
-    margin-bottom: 10px; /* Space between file input and submit button */
+    margin-bottom: 10px;
 }
 
 button#submit {
-    cursor: pointer; /* Visual cue for button */
-    padding: 5px 10px;
-    border: none;
-    border-radius: 5px;
+    cursor: pointer;
+    padding: 10px 15px;
     background-color: #007bff;
     color: white;
+    border: none;
+    border-radius: 5px;
+    transition: background-color 0.3s ease; 
 }
 
 button#submit:hover {
-    background-color: #0056b3; /* Slightly darker on hover for feedback */
+    background-color: #0056b3;
+}
+
+#resultContainer {
+    justify-content: center; 
+}
+
+
+#resultContainer h3, #resultContainer p {
+    margin: 10px 0; 
 }
