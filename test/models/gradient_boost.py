@@ -5,8 +5,16 @@ from sklearn.preprocessing import LabelEncoder
 import pandas as pd
 
 def gradient_boosting_rhythm_classification(filtered_df):
+
+    
+
     # Preparing the data
-    X = filtered_df[['age', 'sex', 'heart_rate', 'standard_deviation', 'weight']]
+    X = filtered_df[['heart_rate', 'p_wave_amplitude', 'p_wave_duration','qrs_duration', 'pr_interval','qt_c','f_wave_frequency',
+                    'atrial_rate', 'irregular_rhythm','p_wave_presence','rr_interval_variability','increased_heart_rate','p_wave_normal_morphology']]
+    
+    # Convert categorical columns to one-hot encoded format
+    X = pd.get_dummies(X, columns=['irregular_rhythm', 'p_wave_presence', 'increased_heart_rate', 'p_wave_normal_morphology'])
+
     y = filtered_df['rhythm_classification']
     record_names = filtered_df['record_name'].values  # Capture record names for later use
 
@@ -42,6 +50,11 @@ def gradient_boosting_rhythm_classification(filtered_df):
         'Actual Rhythm': actual_rhythms,
         'Predicted Rhythm': predicted_rhythms
     })
+
+    mismatches = [(i, actual, predicted) for i, (actual, predicted) in enumerate(zip(actual_rhythms, predicted_rhythms)) if actual != predicted]
+
+    for index, actual, predicted in mismatches:
+        print(f'Index: {index}, Actual: {actual}, Predicted: {predicted}')
 
     # Print evaluation metrics
     print(f"Model Accuracy: {accuracy * 100:.2f}%")

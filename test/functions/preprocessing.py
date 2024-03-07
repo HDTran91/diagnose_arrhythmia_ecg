@@ -53,32 +53,6 @@ def extract_record_name_from_path(path):
     return os.path.basename(path)
 
 
-# def find_qrs_complexes(ecg_signal, r_peaks, fs):
-#     q_points = []
-#     s_points = []
-#     qrs_width = int(0.1 * fs)  # 100 ms around R peak, adjust based on data
-    
-#     for r_peak in r_peaks:
-#         # Define search regions for Q and S points around R peak
-#         q_search_region = ecg_signal[max(0, r_peak - qrs_width):r_peak]
-#         s_search_region = ecg_signal[r_peak:min(len(ecg_signal), r_peak + qrs_width)]
-        
-#         # Find Q point as minimum before R peak
-#         if len(q_search_region) > 0:
-#             q_point = np.argmin(q_search_region) + max(0, r_peak - qrs_width)
-#             q_points.append(q_point)
-        
-#         # Find S point as minimum after R peak
-#         if len(s_search_region) > 0:
-#             s_point = np.argmin(s_search_region) + r_peak
-#             s_points.append(s_point)
-    
-#     return np.array(q_points), np.array(s_points)
-
-
-
-
-
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
     low = lowcut / nyq
@@ -104,8 +78,9 @@ def map_scp_to_rhythm(scp_codes_str):
         'NORM': 'Normal',
         'AFIB': 'Atrial Fibrillation',
         'AFLT': 'Atrial Flutter',
-        'SBRAD': 'Bradycardia',
-        'STACH': 'Tachycardia',
+        'SBRAD': 'Sinus Bradycardia',
+        'STACH': 'Sinus Tachycardia',
+        'SARRH': 'Sinus Arrhythmia'
         # Add more mappings as needed
     }
     

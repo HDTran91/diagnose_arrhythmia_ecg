@@ -3,6 +3,7 @@ from sklearn.base import is_classifier
 from sklearn.pipeline import make_pipeline
 from sklearn.svm import SVC
 import wfdb
+from wfdb import processing
 import os
 import numpy as np
 import pandas as pd
@@ -15,6 +16,8 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from sklearn.impute import SimpleImputer
 from scipy.signal import butter, lfilter, filtfilt
+import heartpy as hp
+from biosppy.signals import ecg
 
 # import model
 import sys
@@ -27,7 +30,7 @@ from test.functions.preprocessing import map_scp_to_rhythm, normalize_signals
 from test.functions.preprocessing import preprocess_population_data
 from test.functions.preprocessing import extract_record_name_from_path
 from test.functions.preprocessing import preprocess_signal_for_p_waves
-from test.functions.calculated import extract_heart_rate
+from test.functions.calculated import calculate_hrv_metrics, detect_irregular_heartbeat, detect_sawtooth_pattern, extract_heart_rate
 from test.functions.calculated import standard_deviation_rr_interval
 from test.functions.calculated import classify_rhythm
 
@@ -53,7 +56,9 @@ for index, row in population_df.iterrows():
         ecg_signal = record.p_signal[:, 0]  # Assuming we're interested in the first lead
 
         sampling_frequency = record.fs
-        
+
+        qrs_inds = processing.xqrs_detect(sig=record.p_signal[:,0], fs=record.fs)
+
         # Normalize and process the ECG signal
         ecg_signal_normalized = normalize_signals(ecg_signal)
 
@@ -65,34 +70,31 @@ for index, row in population_df.iterrows():
         
         # Calculate the heart rate
         heart_rate = extract_heart_rate(peaks, sampling_frequency)
-        
-        # Detect QRS complexes (Q and S points)
-        # q_points, s_points = find_qrs_complexes(filtered_signal, peaks, sampling_frequency)
-        # Calculate QRS widths in milliseconds
-        # qrs_widths_ms = (s_points - q_points) /sampling_frequency * 1000
-        # mean_qrs_width = np.mean(qrs_widths_ms)
+
         
         # R-R intervals for rhythm classification
         rr_intervals = np.diff(peaks) / sampling_frequency
-        
+
+        sdnn, rmssd = calculate_hrv_metrics(rr_intervals)
+
+
+        irregular_heartbeat_detected = detect_irregular_heartbeat(sdnn, rmssd, {'sdnn': 50, 'rmssd': 30})
+
+        is_sawtooth_pattern = detect_sawtooth_pattern(ecg_signal,  qrs_inds, sampling_frequency)
+
         standard_deviation = standard_deviation_rr_interval(rr_intervals)
         # find rhythm based on heart rate and rr interval
-        rhythm = classify_rhythm(heart_rate, standard_deviation)
-
-        # find P-wave
-        # P_wave = find_p_waves(filtered_signal, peaks, sampling_frequency)
-
-        # Check if P-waves are present
-        # p_wave_present = len(P_wave) > 0
-        # anatomic_location = infer_anatomic_origin_with_p_wave(mean_qrs_width, rhythm, p_wave_present )
+        rhythm = classify_rhythm(heart_rate, irregular_heartbeat_detected, is_sawtooth_pattern)
 
         # Append the extracted features to the list
         ecg_features_list.append({
             'record_name': record_name,
             'heart_rate': heart_rate,
             # 'qrs_width': mean_qrs_width,
-            "standard_deviation": standard_deviation,
-            'calculated_rhythm': rhythm,
+            'standard_deviation': standard_deviation,
+            'irregular_heartbeat_detected': irregular_heartbeat_detected,
+            'is_sawtooth_pattern': is_sawtooth_pattern,
+            'calculated_rhythm': rhythm
             # 'anatomic_location': anatomic_location
         })
 
@@ -103,33 +105,34 @@ ecg_features_df = pd.DataFrame(ecg_features_list)
 combined_df = pd.merge(population_df, ecg_features_df, on='record_name', how='left')
 
 # Print the combined DataFrame to verify
-# print(combined_df.head(10))
+print(combined_df.head(50))
 
 
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
 # Apply the rhythm mapping transformation to the scp_codes column in the new dataset
 combined_df['rhythm_classification'] = combined_df['scp_codes'].apply(map_scp_to_rhythm)
 
 # Display the first few rows of the new rhythm_classification column to verify the transformation
 # print(combined_df[['scp_codes', 'rhythm_classification']].head(30))
+# print(combined_df.head(50))
 
 # Filtering for records with 'Normal' or 'Atrial Flutter' rhythm classifications
-filtered_df = combined_df[combined_df['rhythm_classification'].isin(['Normal', 'Atrial Flutter'])]
+filtered_df = combined_df[combined_df['rhythm_classification'].isin(['Normal', 'Atrial Flutter', "Atrial Fibrillation"," Sinus Bradycardia", "Sinus Tachycardia", "Sinus Arrhythmia"])]
 
 # Displaying the filtered DataFrame
 print(filtered_df.head(20))
-filtered_df.to_csv("small-data/filter_data.csv", index= False)
+# filtered_df.to_csv("small-data/filter_data.csv", index= False)
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
  
 # # Gradient Boosting for Rhythm Classification
 
-predictions_df, xgb_classifier, label_encoder = gradient_boosting_rhythm_classification(filtered_df)
+# predictions_df, xgb_classifier, label_encoder = gradient_boosting_rhythm_classification(combined_df)
 
-print(predictions_df[predictions_df['Actual Rhythm'].isin(['Atrial Flutter'])])
+# print(predictions_df[predictions_df['Actual Rhythm'].isin(['Atrial Flutter'])])
 # Display some of the prediction results
 # print(predictions_df.head(20))
 
