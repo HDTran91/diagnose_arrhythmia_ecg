@@ -18,6 +18,10 @@ from sklearn.impute import SimpleImputer
 from scipy.signal import butter, lfilter, filtfilt
 import heartpy as hp
 from biosppy.signals import ecg
+import neurokit2 as nk
+import nolds
+
+
 
 # import model
 import sys
@@ -30,9 +34,8 @@ from test.functions.preprocessing import map_scp_to_rhythm, normalize_signals
 from test.functions.preprocessing import preprocess_population_data
 from test.functions.preprocessing import extract_record_name_from_path
 from test.functions.preprocessing import preprocess_signal_for_p_waves
-from test.functions.calculated import calculate_hrv_metrics, detect_irregular_heartbeat, detect_sawtooth_pattern, extract_heart_rate
-from test.functions.calculated import standard_deviation_rr_interval
-from test.functions.calculated import classify_rhythm
+from test.functions.calculated import extract_atrial_fibrillation_features, extract_atrial_flutter_features, extract_normal_rhythm_features, extract_sinus_tachycardia_features
+
 
 # Directory where your ECG files are stored
 ecg_directory = "small-data/records100/00000"
@@ -57,103 +60,67 @@ for index, row in population_df.iterrows():
 
         sampling_frequency = record.fs
 
-        qrs_inds = processing.xqrs_detect(sig=record.p_signal[:,0], fs=record.fs)
-
         # Normalize and process the ECG signal
         ecg_signal_normalized = normalize_signals(ecg_signal)
 
         filtered_signal = preprocess_signal_for_p_waves(ecg_signal_normalized, sampling_frequency)
 
-        # find the peaks
-        peaks, _ = find_peaks(filtered_signal, height=np.max(filtered_signal)/6, distance=sampling_frequency/3)
+        # Process the ECG signal
+        out = ecg.ecg(signal=filtered_signal, sampling_rate=sampling_frequency, show=False)
 
+        # extract_normal_rhythm_features
+        heart_rate, p_wave_amplitude, p_wave_duration, qrs_duration, pr_interval, qt_c = extract_normal_rhythm_features(out, sampling_frequency)
         
-        # Calculate the heart rate
-        heart_rate = extract_heart_rate(peaks, sampling_frequency)
+        # Extracted features for Atrial Flutter
+        f_wave_frequency, atrial_rate = extract_atrial_flutter_features(out)
 
-        
-        # R-R intervals for rhythm classification
-        rr_intervals = np.diff(peaks) / sampling_frequency
+        # Extracted features for Atrial Fibrillation
+        irregular_rhythm, p_wave_presence, rr_interval_variability = extract_atrial_fibrillation_features(out, sampling_frequency)
 
-        sdnn, rmssd = calculate_hrv_metrics(rr_intervals)
+        # Extracted features for Sinus Tachycardia
+        increased_heart_rate, p_wave_normal_morphology = extract_sinus_tachycardia_features(out)
 
-
-        irregular_heartbeat_detected = detect_irregular_heartbeat(sdnn, rmssd, {'sdnn': 50, 'rmssd': 30})
-
-        is_sawtooth_pattern = detect_sawtooth_pattern(ecg_signal,  qrs_inds, sampling_frequency)
-
-        standard_deviation = standard_deviation_rr_interval(rr_intervals)
-        # find rhythm based on heart rate and rr interval
-        rhythm = classify_rhythm(heart_rate, irregular_heartbeat_detected, is_sawtooth_pattern)
-
-        # Append the extracted features to the list
         ecg_features_list.append({
-            'record_name': record_name,
-            'heart_rate': heart_rate,
-            # 'qrs_width': mean_qrs_width,
-            'standard_deviation': standard_deviation,
-            'irregular_heartbeat_detected': irregular_heartbeat_detected,
-            'is_sawtooth_pattern': is_sawtooth_pattern,
-            'calculated_rhythm': rhythm
-            # 'anatomic_location': anatomic_location
+            "record_name": record_name,
+            "heart_rate": heart_rate,
+            "p_wave_amplitude": p_wave_amplitude,
+            "p_wave_duration": p_wave_duration,
+            "qrs_duration": qrs_duration,
+            "pr_interval": pr_interval,
+            "qt_c": qt_c,
+            "f_wave_frequency": f_wave_frequency,
+            "atrial_rate": atrial_rate,
+            "irregular_rhythm": irregular_rhythm,
+            "p_wave_presence": p_wave_presence,
+            "rr_interval_variability": rr_interval_variability,
+            "increased_heart_rate": increased_heart_rate,
+            "p_wave_normal_morphology": p_wave_normal_morphology
         })
 
 # Convert the list of dictionaries to a DataFrame
 ecg_features_df = pd.DataFrame(ecg_features_list)
+print(ecg_features_df.head(50))
 
 # Merge the ECG features with the population data on the 'record_name' column
 combined_df = pd.merge(population_df, ecg_features_df, on='record_name', how='left')
 
-# Print the combined DataFrame to verify
-print(combined_df.head(50))
-
-
-
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-
 # Apply the rhythm mapping transformation to the scp_codes column in the new dataset
 combined_df['rhythm_classification'] = combined_df['scp_codes'].apply(map_scp_to_rhythm)
 
-# Display the first few rows of the new rhythm_classification column to verify the transformation
-# print(combined_df[['scp_codes', 'rhythm_classification']].head(30))
-# print(combined_df.head(50))
-
 # Filtering for records with 'Normal' or 'Atrial Flutter' rhythm classifications
-filtered_df = combined_df[combined_df['rhythm_classification'].isin(['Normal', 'Atrial Flutter', "Atrial Fibrillation"," Sinus Bradycardia", "Sinus Tachycardia", "Sinus Arrhythmia"])]
+filtered_df = combined_df[combined_df['rhythm_classification'].isin(['Normal','Atrial Flutter', 'Atrial Fibrillation', 'Sinus Tachycardia'])]
 
-# Displaying the filtered DataFrame
-print(filtered_df.head(20))
-# filtered_df.to_csv("small-data/filter_data.csv", index= False)
 
+
+# print(filtered_df[filtered_df['rhythm_classification'].isin(['Sinus Tachycardia'])].head(50))
+print(filtered_df.head(50))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
  
 # # Gradient Boosting for Rhythm Classification
 
-# predictions_df, xgb_classifier, label_encoder = gradient_boosting_rhythm_classification(combined_df)
+predictions_df, xgb_classifier, label_encoder = gradient_boosting_rhythm_classification(filtered_df)
 
-# print(predictions_df[predictions_df['Actual Rhythm'].isin(['Atrial Flutter'])])
-# Display some of the prediction results
-# print(predictions_df.head(20))
-
-#########################################################################################################################
-# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-# Create a Synthetic Test Set:
-
-# # # Identify unique patterns from the provided DataFrame
-# unique_patterns = filtered_df[['rhythm_classification']].drop_duplicates()
-# print(unique_patterns)
-
-# # # # Generate synthetic data for each unique pattern
-
-# synthetic_test_set = generate_synthetic_data(unique_patterns, num_samples=1000)
-# print(synthetic_test_set.head(5))
-
-
-# ##################################################################################################
-# # validate test set with Gradient Boosting
-# comparison_df = evaluate_synthetic_test_set(synthetic_test_set, xgb_classifier, label_encoder)
-# print(comparison_df.head(10))
-
-# # #####################################################################################################################
-
+# # Display some of the prediction results
+# # print(predictions_df[predictions_df['Actual Rhythm'].isin(['Atrial Fibrillation'])])
+print(predictions_df)
